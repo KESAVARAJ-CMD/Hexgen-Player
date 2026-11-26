@@ -1545,6 +1545,11 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
   Timer? _pollTimer;
   bool _isScanned = false;
 
+  void _cancelTimer() {
+    _pollTimer?.cancel();
+    _pollTimer = null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -1554,17 +1559,25 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    _cancelTimer();
     super.dispose();
   }
 
   void _startPollingForScan() {
+    _cancelTimer();
     // Poll every 5 seconds while QR is being shown
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
-      if (_token.isEmpty || _isScanned) return;
+      if (!mounted || _token.isEmpty || _isScanned) {
+        _cancelTimer();
+        return;
+      }
       final isCompleted = await SessionStatusService.isSessionCompleted(_token);
-      if (isCompleted && mounted && !_isScanned) {
-        _pollTimer?.cancel();
+      if (!mounted) {
+        _cancelTimer();
+        return;
+      }
+      if (isCompleted && !_isScanned) {
+        _cancelTimer();
         setState(() => _isScanned = true);
 
         // Mark session as played locally if sessionItem is available
@@ -1640,6 +1653,7 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
           );
 
           if (mounted) {
+            _cancelTimer();
             widget.onDone();
           }
         }
@@ -1887,68 +1901,75 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(24),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.15),
-              blurRadius: 24,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Header with Save Tag & Close
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFDCFCE7),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
-                        color: const Color(0xFF86EFAC),
-                        width: 0.8,
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 14),
-                        SizedBox(width: 5),
-                        Text(
-                          'SAVED IN APP',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w900,
-                            color: Color(0xFF16A34A),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: widget.onDone,
-                    behavior: HitTestBehavior.opaque,
-                    child: Container(
-                      width: 32,
-                      height: 32,
+    return PopScope(
+      onPopInvokedWithResult: (didPop, result) {
+        _cancelTimer();
+      },
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(22, 22, 22, 20),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.15),
+                blurRadius: 24,
+                offset: const Offset(0, 8),
+              ),
+            ],
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Header with Save Tag & Close
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4.5),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF1F5F9),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        color: const Color(0xFFDCFCE7),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: const Color(0xFF86EFAC),
+                          width: 0.8,
+                        ),
                       ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 14),
+                          SizedBox(width: 5),
+                          Text(
+                            'SAVED IN APP',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w900,
+                              color: Color(0xFF16A34A),
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        _cancelTimer();
+                        widget.onDone();
+                      },
+                      behavior: HitTestBehavior.opaque,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF1F5F9),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                        ),
                       child: const Icon(
                         Icons.close_rounded,
                         color: Color(0xFF64748B),
@@ -2195,7 +2216,10 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
                   // Done Button
                   Expanded(
                     child: GestureDetector(
-                      onTap: widget.onDone,
+                      onTap: () {
+                        _cancelTimer();
+                        widget.onDone();
+                      },
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
@@ -2233,6 +2257,7 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
           ),
         ),
       ),
+    ),
     );
   }
 

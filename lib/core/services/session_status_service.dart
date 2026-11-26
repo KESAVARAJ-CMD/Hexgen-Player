@@ -33,18 +33,12 @@ class SessionStatusService {
   static Future<bool> isSessionCompleted(String sessionId) async {
     final result = await checkSessionStatus(sessionId);
     final status = result['status']?.toString().toUpperCase() ?? '';
-    final isValid = result['valid'] as bool?;
+    final hasPlayedAt = result['played_at'] != null && result['played_at'].toString().isNotEmpty;
 
-    // Status is explicitly marked COMPLETED or CONSUMED
-    if (status == 'COMPLETED' || status == 'CONSUMED') {
-      return true;
-    }
-
-    // When machine scans and marks complete, valid becomes false with played_at or completed status
-    if (isValid == false && (result.containsKey('played_at') || status == 'COMPLETED')) {
-      return true;
-    }
-
-    return false;
+    // Critical fix: 'valid: false' alone is NOT enough because non-existent sessions also return valid: false.
+    // Must verify explicit COMPLETED/CONSUMED status OR valid == false with actual played_at timestamp.
+    return status == 'COMPLETED' ||
+        status == 'CONSUMED' ||
+        (result['valid'] == false && hasPlayedAt);
   }
 }

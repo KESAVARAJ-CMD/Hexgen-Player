@@ -34,6 +34,7 @@ class _SessionsTabState extends State<SessionsTab> {
   final SessionsService _sessionsService = SessionsService();
   Timer? _statusPollTimer;
   bool _isCheckingStatus = false;
+  final Set<String> _handledCompletedSessionIds = {};
 
   @override
   void initState() {
@@ -61,24 +62,37 @@ class _SessionsTabState extends State<SessionsTab> {
   @override
   void dispose() {
     _statusPollTimer?.cancel();
+    _statusPollTimer = null;
     _favoritesService.removeListener(_onStateChanged);
     _sessionsService.removeListener(_onStateChanged);
     super.dispose();
   }
 
   Future<void> _checkAndMoveCompletedSessions() async {
-    if (_isCheckingStatus) return;
+    if (_isCheckingStatus || !mounted) return;
     final upcoming = List<SessionItem>.from(_sessionsService.upcomingSessions);
     if (upcoming.isEmpty) return;
 
     _isCheckingStatus = true;
     try {
       for (final session in upcoming) {
+        if (!mounted) break;
+        // Guard 1: Skip if already handled/notified
+        if (_handledCompletedSessionIds.contains(session.id)) continue;
+
         final token = session.sessionToken;
         if (token.isEmpty) continue;
+
         final isCompleted = await SessionStatusService.isSessionCompleted(token);
-        if (isCompleted && mounted) {
+
+        // Guard 2: Verify widget is still mounted AND the session is STILL in upcoming sessions
+        // (prevents duplicate move or duplicate snackbar if QR dialog or user marked it played while awaiting)
+        final isStillUpcoming = _sessionsService.upcomingSessions.any((s) => s.id == session.id);
+
+        if (isCompleted && mounted && isStillUpcoming && !_handledCompletedSessionIds.contains(session.id)) {
+          _handledCompletedSessionIds.add(session.id);
           await _sessionsService.markAsPlayed(session.id);
+
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
@@ -198,9 +212,17 @@ class _SessionsTabState extends State<SessionsTab> {
         length: item.length,
         variation: item.variation,
         machineId: 'HEX-${item.id.replaceAll(RegExp(r'[^0-9]'), '').padLeft(4, '0')}',
-        onDone: () => Navigator.pop(ctx),
+        onDone: () {
+          _handledCompletedSessionIds.add(item.id);
+          Navigator.pop(ctx);
+        },
       ),
-    );
+    ).then((_) {
+      // If session was played via QR dialog, prevent duplicate notification
+      if (!_sessionsService.upcomingSessions.any((s) => s.id == item.id)) {
+        _handledCompletedSessionIds.add(item.id);
+      }
+    });
   }
 
   void _confirmDeleteSession(String sessionId, String sessionTitle) {
