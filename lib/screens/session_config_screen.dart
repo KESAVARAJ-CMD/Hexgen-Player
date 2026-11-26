@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../core/services/session_status_service.dart';
 import '../core/services/sessions_service.dart';
 import '../core/theme/app_theme.dart';
 import '../core/widgets/cyber_glass_backdrop.dart';
@@ -1540,11 +1542,109 @@ class SessionQrShareDialog extends StatefulWidget {
 class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
   String _resolvedPlayerName = 'Player';
   String _resolvedPlayerMobile = '9876543210';
+  Timer? _pollTimer;
+  bool _isScanned = false;
 
   @override
   void initState() {
     super.initState();
     _resolvePlayerProfile();
+    _startPollingForScan();
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _startPollingForScan() {
+    // Poll every 5 seconds while QR is being shown
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (_token.isEmpty || _isScanned) return;
+      final isCompleted = await SessionStatusService.isSessionCompleted(_token);
+      if (isCompleted && mounted && !_isScanned) {
+        _pollTimer?.cancel();
+        setState(() => _isScanned = true);
+
+        // Mark session as played locally if sessionItem is available
+        if (widget.sessionItem != null) {
+          await SessionsService().markAsPlayed(widget.sessionItem!.id);
+        }
+
+        if (mounted) {
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (dCtx) => AlertDialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFDCFCE7),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.check_circle_rounded,
+                      color: Color(0xFF16A34A),
+                      size: 48,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Session Loaded! 🏏',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w900,
+                      color: Color(0xFF0F172A),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Your session has been successfully loaded on the bowling machine.\n\nGet ready to bat!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Color(0xFF64748B),
+                      height: 1.4,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0052FF),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(dCtx);
+                      },
+                      child: const Text(
+                        'Let\'s Play! 🏏',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+
+          if (mounted) {
+            widget.onDone();
+          }
+        }
+      }
+    });
   }
 
   Future<void> _resolvePlayerProfile() async {
@@ -1988,7 +2088,57 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
                 ),
               ),
 
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
+
+              // Live Machine Scan Status Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: _isScanned ? const Color(0xFFDCFCE7) : const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: _isScanned ? const Color(0xFF86EFAC) : const Color(0xFFE2E8F0),
+                    width: 0.9,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_isScanned) ...[
+                      const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 14),
+                      const SizedBox(width: 6),
+                      const Text(
+                        'Loaded on machine! ✅',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF16A34A),
+                        ),
+                      ),
+                    ] else ...[
+                      const SizedBox(
+                        width: 10,
+                        height: 10,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF0052FF)),
+                        ),
+                      ),
+                      const SizedBox(width: 7),
+                      const Text(
+                        'Waiting for machine to scan...',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF64748B),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 12),
 
               // Session Quick Spec Chips
               Wrap(

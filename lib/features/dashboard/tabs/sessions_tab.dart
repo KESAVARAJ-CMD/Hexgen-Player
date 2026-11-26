@@ -1,7 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
 import '../../../core/network/matrix_api_service.dart';
 import '../../../core/services/favorites_service.dart';
+import '../../../core/services/session_status_service.dart';
 import '../../../core/services/sessions_service.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../screens/session_config_screen.dart';
@@ -30,6 +32,8 @@ class _SessionsTabState extends State<SessionsTab> {
 
   final FavoritesService _favoritesService = FavoritesService();
   final SessionsService _sessionsService = SessionsService();
+  Timer? _statusPollTimer;
+  bool _isCheckingStatus = false;
 
   @override
   void initState() {
@@ -38,6 +42,11 @@ class _SessionsTabState extends State<SessionsTab> {
     _sessionsService.addListener(_onStateChanged);
     _sessionsService.fetchCloudSessions();
 
+    // Poll every 10 seconds to check if any upcoming session was scanned on machine
+    _statusPollTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      _checkAndMoveCompletedSessions();
+    });
+
     // Default to 'upcoming' if there are upcoming sessions, else 'past'
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && _sessionsService.upcomingSessions.isEmpty && _sessionsService.pastSessions.isNotEmpty) {
@@ -45,14 +54,59 @@ class _SessionsTabState extends State<SessionsTab> {
           _selectedTab = 'past';
         });
       }
+      _checkAndMoveCompletedSessions();
     });
   }
 
   @override
   void dispose() {
+    _statusPollTimer?.cancel();
     _favoritesService.removeListener(_onStateChanged);
     _sessionsService.removeListener(_onStateChanged);
     super.dispose();
+  }
+
+  Future<void> _checkAndMoveCompletedSessions() async {
+    if (_isCheckingStatus) return;
+    final upcoming = List<SessionItem>.from(_sessionsService.upcomingSessions);
+    if (upcoming.isEmpty) return;
+
+    _isCheckingStatus = true;
+    try {
+      for (final session in upcoming) {
+        final token = session.sessionToken;
+        if (token.isEmpty) continue;
+        final isCompleted = await SessionStatusService.isSessionCompleted(token);
+        if (isCompleted && mounted) {
+          await _sessionsService.markAsPlayed(session.id);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded, color: Color(0xFF00E676), size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${session.name} has been played! ✅',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                ),
+                backgroundColor: AppTheme.navyBlue,
+                duration: const Duration(seconds: 4),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('[SessionsTab] _checkAndMoveCompletedSessions error: $e');
+    } finally {
+      _isCheckingStatus = false;
+    }
   }
 
   void _onStateChanged() {
