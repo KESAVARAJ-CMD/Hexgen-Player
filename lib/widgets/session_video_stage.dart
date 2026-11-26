@@ -70,7 +70,15 @@ class _SessionVideoStageState extends State<SessionVideoStage> {
   }
 
   Future<void> _boot() async {
+    // If empty or no video path, tear down any old controller immediately and reset state
     if (widget.assetPath.trim().isEmpty) {
+      final oldController = _controller;
+      _controller = null;
+      if (oldController != null) {
+        oldController.removeListener(_onTick);
+        await oldController.pause();
+        await oldController.dispose();
+      }
       if (!mounted) return;
       setState(() {
         _ready = false;
@@ -81,14 +89,21 @@ class _SessionVideoStageState extends State<SessionVideoStage> {
       return;
     }
 
+    final oldController = _controller;
+    _controller = null;
+    if (oldController != null) {
+      oldController.removeListener(_onTick);
+      await oldController.pause();
+      await oldController.dispose();
+    }
+
+    if (!mounted) return;
     setState(() {
       _loading = true;
       _error = null;
       _ready = false;
+      _playing = false;
     });
-
-    await _controller?.dispose();
-    _controller = null;
 
     // 1. Direct Network Streaming (Cloudflare R2 Presigned URLs)
     if (widget.assetPath.startsWith('http://') || widget.assetPath.startsWith('https://')) {
@@ -455,7 +470,7 @@ class _SessionVideoStageState extends State<SessionVideoStage> {
                 Row(
                   children: [
                     Text(
-                      c != null && c.value.isInitialized
+                      _ready && c != null && c.value.isInitialized
                           ? _fmt(c.value.position)
                           : '00:00',
                       style: const TextStyle(
@@ -476,7 +491,7 @@ class _SessionVideoStageState extends State<SessionVideoStage> {
                           thumbColor: Colors.white,
                         ),
                         child: Slider(
-                          value: progress.toDouble(),
+                          value: _ready ? progress.toDouble() : 0.0,
                           onChanged: !_ready || c == null
                               ? null
                               : (v) {
@@ -490,7 +505,7 @@ class _SessionVideoStageState extends State<SessionVideoStage> {
                       ),
                     ),
                     Text(
-                      c != null && c.value.isInitialized
+                      _ready && c != null && c.value.isInitialized
                           ? _fmt(c.value.duration)
                           : '00:00',
                       style: const TextStyle(
@@ -506,45 +521,48 @@ class _SessionVideoStageState extends State<SessionVideoStage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _iconBtn(Icons.skip_previous_rounded, () => _stepFrames(-1)),
-                    _iconBtn(Icons.replay_5_rounded, () async {
+                    _iconBtn(Icons.skip_previous_rounded, _ready ? () => _stepFrames(-1) : null),
+                    _iconBtn(Icons.replay_5_rounded, _ready ? () async {
                       final c = _controller;
                       if (c == null || !_ready) return;
                       final t = c.value.position - const Duration(seconds: 5);
                       await c.seekTo(t < Duration.zero ? Duration.zero : t);
-                    }),
+                    } : null),
                     GestureDetector(
-                      onTap: _togglePlay,
-                      child: Container(
-                        width: 48,
-                        height: 48,
-                        decoration: BoxDecoration(
-                          gradient: AppTheme.primaryCtaGradient,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppTheme.electricBlue.withValues(alpha: 0.35),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: Icon(
-                          _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                          color: Colors.white,
-                          size: 28,
+                      onTap: _ready ? _togglePlay : null,
+                      child: Opacity(
+                        opacity: _ready ? 1.0 : 0.45,
+                        child: Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            gradient: AppTheme.primaryCtaGradient,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppTheme.electricBlue.withValues(alpha: 0.35),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Icon(
+                            _playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 28,
+                          ),
                         ),
                       ),
                     ),
-                    _iconBtn(Icons.forward_5_rounded, () async {
+                    _iconBtn(Icons.forward_5_rounded, _ready ? () async {
                       final c = _controller;
                       if (c == null || !_ready) return;
                       final t = c.value.position + const Duration(seconds: 5);
                       await c.seekTo(
                         t > c.value.duration ? c.value.duration : t,
                       );
-                    }),
-                    _iconBtn(Icons.skip_next_rounded, () => _stepFrames(1)),
+                    } : null),
+                    _iconBtn(Icons.skip_next_rounded, _ready ? () => _stepFrames(1) : null),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -570,7 +588,7 @@ class _SessionVideoStageState extends State<SessionVideoStage> {
                             return Padding(
                               padding: const EdgeInsets.only(right: 6),
                               child: GestureDetector(
-                                onTap: () => _setSpeed(s),
+                                onTap: _ready ? () => _setSpeed(s) : null,
                                 child: AnimatedContainer(
                                   duration: const Duration(milliseconds: 160),
                                   padding: const EdgeInsets.symmetric(
@@ -627,20 +645,24 @@ class _SessionVideoStageState extends State<SessionVideoStage> {
     );
   }
 
-  Widget _iconBtn(IconData icon, VoidCallback onTap) {
+  Widget _iconBtn(IconData icon, VoidCallback? onTap) {
+    final enabled = onTap != null;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
-      child: Container(
-        width: 40,
-        height: 40,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: AppTheme.iceBlue,
-          shape: BoxShape.circle,
-          border: Border.all(color: AppTheme.cardBorderColor),
+      child: Opacity(
+        opacity: enabled ? 1.0 : 0.4,
+        child: Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: AppTheme.iceBlue,
+            shape: BoxShape.circle,
+            border: Border.all(color: AppTheme.cardBorderColor),
+          ),
+          child: Icon(icon, size: 20, color: AppTheme.navyBlue),
         ),
-        child: Icon(icon, size: 20, color: AppTheme.navyBlue),
       ),
     );
   }

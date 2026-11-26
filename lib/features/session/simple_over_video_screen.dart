@@ -405,6 +405,7 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
                   ],
                 ),
                 child: SessionVideoStage(
+                  key: ValueKey<String>('stage_${_selectedBallIndex}_${_resolvedStreamUrl ?? ""}'),
                   assetPath: _resolvedStreamUrl ?? '',
                   keypoints: const <String, Keypoint>{},
                   title: '${widget.overName} - ${activeBall['ball']}',
