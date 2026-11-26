@@ -17,6 +17,8 @@ class SessionVideoStage extends StatefulWidget {
   final String subtitle;
   final double height;
   final bool compact;
+  final VoidCallback? onPreviousBall;
+  final VoidCallback? onNextBall;
 
   const SessionVideoStage({
     super.key,
@@ -26,6 +28,8 @@ class SessionVideoStage extends StatefulWidget {
     this.subtitle = '',
     this.height = 320,
     this.compact = false,
+    this.onPreviousBall,
+    this.onNextBall,
   });
 
   @override
@@ -521,7 +525,10 @@ class _SessionVideoStageState extends State<SessionVideoStage> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    _iconBtn(Icons.skip_previous_rounded, _ready ? () => _stepFrames(-1) : null),
+                    _iconBtn(
+                      Icons.skip_previous_rounded,
+                      widget.onPreviousBall ?? (_ready ? () => _stepFrames(-1) : null),
+                    ),
                     _iconBtn(Icons.replay_5_rounded, _ready ? () async {
                       final c = _controller;
                       if (c == null || !_ready) return;
@@ -562,7 +569,10 @@ class _SessionVideoStageState extends State<SessionVideoStage> {
                         t > c.value.duration ? c.value.duration : t,
                       );
                     } : null),
-                    _iconBtn(Icons.skip_next_rounded, _ready ? () => _stepFrames(1) : null),
+                    _iconBtn(
+                      Icons.skip_next_rounded,
+                      widget.onNextBall ?? (_ready ? () => _stepFrames(1) : null),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 10),

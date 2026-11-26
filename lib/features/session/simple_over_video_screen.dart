@@ -412,6 +412,18 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
                   subtitle: '${widget.overType} • ${activeBall['speed']}',
                   height: 260,
                   compact: true,
+                  onPreviousBall: _selectedBallIndex > 0
+                      ? () {
+                          setState(() => _selectedBallIndex--);
+                          _resolveCloudVideoUrl();
+                        }
+                      : null,
+                  onNextBall: _selectedBallIndex < _balls.length - 1
+                      ? () {
+                          setState(() => _selectedBallIndex++);
+                          _resolveCloudVideoUrl();
+                        }
+                      : null,
                 ),
               ),
             ),
