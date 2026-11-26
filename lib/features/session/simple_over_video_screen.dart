@@ -97,6 +97,11 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
   }
 
   Future<void> _resolveCloudVideoUrl() async {
+    // Clear immediately to prevent showing previous ball's video while resolving
+    if (mounted) {
+      setState(() => _resolvedStreamUrl = null);
+    }
+
     final currentBallNum = _selectedBallIndex + 1;
 
     // 1. Check if this specific ball has a cloud video path
@@ -267,22 +272,32 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
           Builder(
             builder: (context) {
               final activeBall = _balls[_selectedBallIndex];
+              final currentBallNum = _selectedBallIndex + 1;
+              final bool hasVideo = (_resolvedStreamUrl != null && _resolvedStreamUrl!.isNotEmpty) ||
+                  (widget.ballVideos != null && widget.ballVideos!.containsKey(currentBallNum)) ||
+                  (currentBallNum == 1 && widget.videoPath != null && widget.videoPath!.isNotEmpty);
               final ballName = activeBall['ball'] ?? 'Ball 1';
               final isHl = _isBallHighlighted(ballName);
               return IconButton(
-                tooltip: isHl ? 'In Athlete Highlights ⭐' : 'Add Shot to Profile Highlights ⭐',
+                tooltip: !hasVideo
+                    ? 'No replay video available'
+                    : (isHl ? 'In Athlete Highlights ⭐' : 'Add Shot to Profile Highlights ⭐'),
                 icon: Container(
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: isHl ? const Color(0xFFFEF3C7) : const Color(0xFFEFF6FF),
+                    color: !hasVideo
+                        ? const Color(0xFFF1F5F9)
+                        : (isHl ? const Color(0xFFFEF3C7) : const Color(0xFFEFF6FF)),
                     shape: BoxShape.circle,
-                    border: isHl
+                    border: isHl && hasVideo
                         ? Border.all(color: const Color(0xFFFCD34D), width: 0.8)
                         : null,
                   ),
                   child: Icon(
-                    isHl ? Icons.star_rounded : Icons.star_outline_rounded,
-                    color: isHl ? const Color(0xFFD97706) : AppTheme.electricBlue,
+                    isHl && hasVideo ? Icons.star_rounded : Icons.star_outline_rounded,
+                    color: !hasVideo
+                        ? const Color(0xFF94A3B8)
+                        : (isHl ? const Color(0xFFD97706) : AppTheme.electricBlue),
                     size: 18,
                   ),
                 ),
@@ -293,6 +308,10 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
           Builder(
             builder: (context) {
               final activeBall = _balls[_selectedBallIndex];
+              final currentBallNum = _selectedBallIndex + 1;
+              final bool hasVideo = (_resolvedStreamUrl != null && _resolvedStreamUrl!.isNotEmpty) ||
+                  (widget.ballVideos != null && widget.ballVideos!.containsKey(currentBallNum)) ||
+                  (currentBallNum == 1 && widget.videoPath != null && widget.videoPath!.isNotEmpty);
               final ballId = '${widget.sessionTitle}_${widget.overName}_${activeBall['ball']}';
               final isFav = _favoritesService.isFavorite(ballId);
               return IconButton(
@@ -313,6 +332,28 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
                   ),
                 ),
                 onPressed: () async {
+                  if (!hasVideo) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: AppTheme.navyBlue,
+                        behavior: SnackBarBehavior.floating,
+                        content: Row(
+                          children: [
+                            const Icon(Icons.videocam_off_rounded, color: Colors.white70, size: 18),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Cannot favorite: No video recorded for ${activeBall['ball']}.',
+                                style: const TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                    return;
+                  }
                   final item = FavoriteItem(
                     id: ballId,
                     title: '${widget.sessionTitle} - ${widget.overName} (${activeBall['ball']})',
@@ -327,6 +368,8 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
                       'ball': activeBall['ball'],
                       'ballIndex': _selectedBallIndex,
                       'summary': activeBall['desc'],
+                      'videoPath': widget.ballVideos?[currentBallNum] ?? (currentBallNum == 1 ? widget.videoPath : null),
+                      'streamUrl': _resolvedStreamUrl,
                     },
                   );
                   final added = await _favoritesService.toggleFavorite(item);
@@ -364,21 +407,45 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
           Builder(
             builder: (context) {
               final activeBall = _balls[_selectedBallIndex];
+              final currentBallNum = _selectedBallIndex + 1;
+              final bool hasVideo = (_resolvedStreamUrl != null && _resolvedStreamUrl!.isNotEmpty) ||
+                  (widget.ballVideos != null && widget.ballVideos!.containsKey(currentBallNum)) ||
+                  (currentBallNum == 1 && widget.videoPath != null && widget.videoPath!.isNotEmpty);
               return IconButton(
-                tooltip: 'Download Replay Video',
+                tooltip: hasVideo ? 'Download Replay Video' : 'No Video to Download',
                 icon: Container(
                   padding: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFF1F5F9),
+                  decoration: BoxDecoration(
+                    color: hasVideo ? const Color(0xFFF1F5F9) : const Color(0xFFF8FAFC),
                     shape: BoxShape.circle,
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.download_rounded,
-                    color: Color(0xFF0F172A),
+                    color: hasVideo ? const Color(0xFF0F172A) : const Color(0xFFCBD5E1),
                     size: 18,
                   ),
                 ),
-                onPressed: () => _downloadCurrentVideo(context, activeBall),
+                onPressed: hasVideo ? () => _downloadCurrentVideo(context, activeBall) : () {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      backgroundColor: AppTheme.navyBlue,
+                      behavior: SnackBarBehavior.floating,
+                      content: Row(
+                        children: [
+                          const Icon(Icons.videocam_off_rounded, color: Colors.white70, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Cannot download: No video recorded for ${activeBall['ball']}.',
+                              style: const TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                      duration: const Duration(seconds: 2),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -1257,6 +1324,10 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
   Widget _buildHighlightShotButton(BuildContext context, Map<String, String> activeBall) {
     final ballName = activeBall['ball'] ?? 'Ball 1';
     final isHl = _isBallHighlighted(ballName);
+    final currentBallNum = _selectedBallIndex + 1;
+    final bool hasVideo = (_resolvedStreamUrl != null && _resolvedStreamUrl!.isNotEmpty) ||
+        (widget.ballVideos != null && widget.ballVideos!.containsKey(currentBallNum)) ||
+        (currentBallNum == 1 && widget.videoPath != null && widget.videoPath!.isNotEmpty);
 
     return InkWell(
       borderRadius: BorderRadius.circular(14),
@@ -1265,43 +1336,57 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
-          gradient: isHl
+          gradient: !hasVideo
               ? const LinearGradient(
-                  colors: [Color(0xFF059669), Color(0xFF10B981)],
+                  colors: [Color(0xFFE2E8F0), Color(0xFFCBD5E1)],
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                 )
-              : const LinearGradient(
-                  colors: [Color(0xFF0052FF), Color(0xFF00D2FF)],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
+              : (isHl
+                  ? const LinearGradient(
+                      colors: [Color(0xFF059669), Color(0xFF10B981)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    )
+                  : const LinearGradient(
+                      colors: [Color(0xFF0052FF), Color(0xFF00D2FF)],
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                    )),
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: (isHl ? const Color(0xFF10B981) : const Color(0xFF0052FF))
-                  .withValues(alpha: 0.28),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
+          boxShadow: hasVideo
+              ? [
+                  BoxShadow(
+                    color: (isHl ? const Color(0xFF10B981) : const Color(0xFF0052FF))
+                        .withValues(alpha: 0.28),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              isHl ? Icons.stars_rounded : Icons.star_border_rounded,
-              color: isHl ? const Color(0xFFFDE047) : Colors.white,
+              !hasVideo
+                  ? Icons.videocam_off_rounded
+                  : (isHl ? Icons.stars_rounded : Icons.star_border_rounded),
+              color: !hasVideo
+                  ? const Color(0xFF64748B)
+                  : (isHl ? const Color(0xFFFDE047) : Colors.white),
               size: 19,
             ),
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                isHl
-                    ? '$ballName IS IN PROFILE HIGHLIGHTS ⭐'
-                    : 'ADD $ballName TO HIGHLIGHTS ⭐',
-                style: const TextStyle(
-                  color: Colors.white,
+                !hasVideo
+                    ? 'NO REPLAY TO HIGHLIGHT'
+                    : (isHl
+                        ? '$ballName IS IN PROFILE HIGHLIGHTS ⭐'
+                        : 'ADD $ballName TO HIGHLIGHTS ⭐'),
+                style: TextStyle(
+                  color: !hasVideo ? const Color(0xFF475569) : Colors.white,
                   fontWeight: FontWeight.w900,
                   fontSize: 12.5,
                   letterSpacing: 0.3,
@@ -1320,7 +1405,43 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
     BuildContext context,
     Map<String, String> activeBall,
   ) async {
+    final currentBallNum = _selectedBallIndex + 1;
     final ballName = activeBall['ball'] ?? 'Ball 1';
+
+    // 1. Guard check: Only deliveries with recorded video can be added to Profile Highlights
+    String? ballCloudVideoPath;
+    if (widget.ballVideos != null && widget.ballVideos!.containsKey(currentBallNum)) {
+      ballCloudVideoPath = widget.ballVideos![currentBallNum];
+    } else if (currentBallNum == 1 && widget.videoPath != null && widget.videoPath!.isNotEmpty) {
+      ballCloudVideoPath = widget.videoPath;
+    }
+
+    final bool hasVideo = (ballCloudVideoPath != null && ballCloudVideoPath.isNotEmpty) ||
+        (_resolvedStreamUrl != null && _resolvedStreamUrl!.isNotEmpty);
+
+    if (!hasVideo) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.navyBlue,
+          behavior: SnackBarBehavior.floating,
+          content: Row(
+            children: [
+              const Icon(Icons.videocam_off_rounded, color: Colors.white70, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Cannot add $ballName to Profile Highlights: No replay video was recorded for this delivery.',
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
     final ballId = _ballHighlightId(ballName);
     final prefs = await SharedPreferences.getInstance();
     const key = 'athlete_custom_highlights_v1';
@@ -1349,13 +1470,34 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
     final existingIndex = currentList.indexWhere((item) => item.id == ballId);
     final ballSpeed = activeBall['speed'] ?? widget.speed;
 
-    // Resolve cloud video path for this specific ball
-    final currentBallNum = _selectedBallIndex + 1;
-    String? ballCloudVideoPath;
-    if (widget.ballVideos != null && widget.ballVideos!.containsKey(currentBallNum)) {
-      ballCloudVideoPath = widget.ballVideos![currentBallNum];
-    } else if (currentBallNum == 1 && widget.videoPath != null && widget.videoPath!.isNotEmpty) {
-      ballCloudVideoPath = widget.videoPath;
+    // Toggle: If already in highlights, tapping again removes it
+    if (existingIndex >= 0) {
+      currentList.removeAt(existingIndex);
+      final updatedStrings = currentList.map((e) => jsonEncode(e.toJson())).toList();
+      await prefs.setStringList(key, updatedStrings);
+      await _loadHighlightStatus();
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.navyBlue,
+          behavior: SnackBarBehavior.floating,
+          content: Row(
+            children: [
+              const Icon(Icons.star_border_rounded, color: Colors.white70, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Removed $ballName from Profile Highlights.',
+                  style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.white, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+      return;
     }
 
     // Meaningful sports title: Over 01 • Ball 1
@@ -1375,9 +1517,6 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
       streamUrl: _resolvedStreamUrl,
     );
 
-    if (existingIndex >= 0) {
-      currentList.removeAt(existingIndex);
-    }
     currentList.insert(0, newItem);
 
     final updatedStrings = currentList.map((e) => jsonEncode(e.toJson())).toList();
@@ -1418,35 +1557,52 @@ class _SimpleOverVideoScreenState extends State<SimpleOverVideoScreen> {
   }
 
   Widget _buildDownloadButton(BuildContext context, Map<String, String> activeBall) {
+    final currentBallNum = _selectedBallIndex + 1;
+    final bool hasVideo = (_resolvedStreamUrl != null && _resolvedStreamUrl!.isNotEmpty) ||
+        (widget.ballVideos != null && widget.ballVideos!.containsKey(currentBallNum)) ||
+        (currentBallNum == 1 && widget.videoPath != null && widget.videoPath!.isNotEmpty);
+
     return InkWell(
       borderRadius: BorderRadius.circular(14),
       onTap: () => _downloadCurrentVideo(context, activeBall),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF0F172A), Color(0xFF334155)],
-            begin: Alignment.centerLeft,
-            end: Alignment.centerRight,
-          ),
+          gradient: !hasVideo
+              ? const LinearGradient(
+                  colors: [Color(0xFFE2E8F0), Color(0xFFCBD5E1)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                )
+              : const LinearGradient(
+                  colors: [Color(0xFF0F172A), Color(0xFF334155)],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
           borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0F172A).withValues(alpha: 0.22),
-              blurRadius: 8,
-              offset: const Offset(0, 3),
-            ),
-          ],
+          boxShadow: hasVideo
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFF0F172A).withValues(alpha: 0.22),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ]
+              : null,
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.download_rounded, color: Colors.white, size: 18),
-            SizedBox(width: 6),
+            Icon(
+              Icons.download_rounded,
+              color: !hasVideo ? const Color(0xFF64748B) : Colors.white,
+              size: 18,
+            ),
+            const SizedBox(width: 6),
             Text(
               'DOWNLOAD',
               style: TextStyle(
-                color: Colors.white,
+                color: !hasVideo ? const Color(0xFF475569) : Colors.white,
                 fontWeight: FontWeight.w900,
                 fontSize: 12,
                 letterSpacing: 0.4,

@@ -129,16 +129,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
             }
           }
 
-          // Auto-attach cloud videoPath if it was previously saved with null
-          String? cleanVideoPath = item.videoPath;
-          if (cleanVideoPath == null || cleanVideoPath.isEmpty) {
-            if (item.id.contains('Ball 1') || cleanTitle.contains('Ball 1')) {
-              cleanVideoPath = 'sessions/1/b08f02e375990f4af9c1d585be805dce52d5e29c16f0e88527fad2d3785b8452.mp4';
-              needsPurge = true;
-            } else if (item.id.contains('Ball 3') || cleanTitle.contains('Ball 3')) {
-              cleanVideoPath = 'sessions/1/5d22ac24280482fc3d2aad8f0741731171b64906bfdca062530956fadbb1879d.mp4';
-              needsPurge = true;
-            }
+          // If highlight has no video recorded, don't show it in Athlete Video Highlights
+          if ((item.videoPath == null || item.videoPath!.isEmpty) &&
+              (item.streamUrl == null || item.streamUrl!.isEmpty) &&
+              (item.videoAsset == null || item.videoAsset!.isEmpty)) {
+            needsPurge = true;
+            continue;
           }
 
           // Force thumbnailUrl to null to permanently purge mock Unsplash URLs
@@ -156,7 +152,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             icon: item.icon,
             gradientColors: item.gradientColors,
             videoAsset: item.videoAsset,
-            videoPath: cleanVideoPath,
+            videoPath: item.videoPath,
             streamUrl: item.streamUrl,
           ));
         } catch (_) {}
