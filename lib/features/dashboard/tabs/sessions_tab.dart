@@ -314,9 +314,23 @@ class _SessionsTabState extends State<SessionsTab> {
     );
 
     if (created == true && mounted) {
+      final newest = _sessionsService.sessions.isNotEmpty ? _sessionsService.sessions.first : null;
+      final alreadyScanned = newest != null && !newest.isUpcoming;
+      if (alreadyScanned) {
+        _handledCompletedSessionIds.add(newest.id);
+      }
       setState(() {
-        _selectedTab = 'upcoming'; // Switch to Upcoming so user immediately sees new session & QR
+        _selectedTab = alreadyScanned ? 'past' : 'upcoming';
       });
+      if (alreadyScanned) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${newest.name} loaded on machine! Get ready to bat 🏏'),
+            backgroundColor: const Color(0xFF16A34A),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     }
   }
 
@@ -368,13 +382,22 @@ class _SessionsTabState extends State<SessionsTab> {
     );
 
     if (created == true && mounted) {
+      final newest = _sessionsService.sessions.isNotEmpty ? _sessionsService.sessions.first : null;
+      final alreadyScanned = newest != null && !newest.isUpcoming;
+      if (alreadyScanned) {
+        _handledCompletedSessionIds.add(newest.id);
+      }
       setState(() {
-        _selectedTab = 'upcoming'; // Switch to Upcoming so player immediately sees fresh session & new QR
+        _selectedTab = alreadyScanned ? 'past' : 'upcoming';
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Session booked! Fresh QR code ready in Upcoming Sessions.'),
-          backgroundColor: AppTheme.navyBlue,
+        SnackBar(
+          content: Text(
+            alreadyScanned
+                ? '${newest.name} loaded on machine! Get ready to bat 🏏'
+                : 'Session booked! Fresh QR code ready in Upcoming Sessions.',
+          ),
+          backgroundColor: alreadyScanned ? const Color(0xFF16A34A) : AppTheme.navyBlue,
           behavior: SnackBarBehavior.floating,
         ),
       );

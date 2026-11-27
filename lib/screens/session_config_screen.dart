@@ -1553,11 +1553,22 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
   String _resolvedPlayerName = 'Player';
   String _resolvedPlayerMobile = '9876543210';
   Timer? _pollTimer;
+  Timer? _autoCloseTimer;
   bool _isScanned = false;
+  bool _didFinish = false;
 
   void _cancelTimer() {
     _pollTimer?.cancel();
     _pollTimer = null;
+    _autoCloseTimer?.cancel();
+    _autoCloseTimer = null;
+  }
+
+  void _finishDialog() {
+    if (_didFinish || !mounted) return;
+    _didFinish = true;
+    _cancelTimer();
+    widget.onDone();
   }
 
   @override
@@ -1575,10 +1586,10 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
 
   void _startPollingForScan() {
     _cancelTimer();
-    // Poll every 5 seconds while QR is being shown
-    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+    // Poll every 3 seconds while QR is being shown
+    _pollTimer = Timer.periodic(const Duration(seconds: 3), (_) async {
       if (!mounted || _token.isEmpty || _isScanned) {
-        _cancelTimer();
+        _pollTimer?.cancel();
         return;
       }
       final isCompleted = await SessionStatusService.isSessionCompleted(_token);
@@ -1587,7 +1598,8 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
         return;
       }
       if (isCompleted && !_isScanned) {
-        _cancelTimer();
+        _pollTimer?.cancel();
+        _pollTimer = null;
         setState(() => _isScanned = true);
 
         // Mark session as played locally if sessionItem is available
@@ -1595,77 +1607,11 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
           await SessionsService().markAsPlayed(widget.sessionItem!.id);
         }
 
-        if (mounted) {
-          await showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (dCtx) => AlertDialog(
-              backgroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFDCFCE7),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.check_circle_rounded,
-                      color: Color(0xFF16A34A),
-                      size: 48,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Session Loaded! 🏏',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w900,
-                      color: Color(0xFF0F172A),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Your session has been successfully loaded on the bowling machine.\n\nGet ready to bat!',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Color(0xFF64748B),
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF0052FF),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                      onPressed: () {
-                        Navigator.pop(dCtx);
-                      },
-                      child: const Text(
-                        'Let\'s Play! 🏏',
-                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-
-          if (mounted) {
-            _cancelTimer();
-            widget.onDone();
-          }
+        // Automatically close QR dialog & return to sessions screen after brief confirmation
+        if (mounted && !_didFinish) {
+          _autoCloseTimer = Timer(const Duration(milliseconds: 1400), () {
+            _finishDialog();
+          });
         }
       }
     });
@@ -1956,10 +1902,7 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
                       ),
                     ),
                     GestureDetector(
-                      onTap: () {
-                        _cancelTimer();
-                        widget.onDone();
-                      },
+                      onTap: _finishDialog,
                       behavior: HitTestBehavior.opaque,
                       child: Container(
                         width: 32,
@@ -2008,115 +1951,170 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
 
               const SizedBox(height: 16),
 
-              // ── REAL SCANNABLE QR CODE CONTAINER ──────────────────────────
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(
-                    color: const Color(0xFFE2E8F0),
-                    width: 1.2,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color(0xFF0052FF).withValues(alpha: 0.08),
-                      blurRadius: 14,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: QrImageView(
-                        data: qrDataText,
-                        version: QrVersions.auto,
-                        size: 185.0,
-                        backgroundColor: Colors.white,
-                        eyeStyle: const QrEyeStyle(
-                          eyeShape: QrEyeShape.square,
-                          color: Color(0xFF0F172A),
-                        ),
-                        dataModuleStyle: const QrDataModuleStyle(
-                          dataModuleShape: QrDataModuleShape.square,
-                          color: Color(0xFF0F172A),
-                        ),
-                        errorCorrectionLevel: QrErrorCorrectLevel.L,
-                        errorStateBuilder: (ctx, err) => const SizedBox(
-                          width: 185,
-                          height: 185,
-                          child: Center(
-                            child: Text(
-                              'Use Session ID below\nto load session',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    // Machine pairing ID tag
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        'ID: $_code • $_speedStr',
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w800,
-                          color: Color(0xFF0052FF),
-                          letterSpacing: 0.4,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    // Tap to copy Session ID (Operator fallback for camera glare)
-                    GestureDetector(
-                      onTap: () {
-                        Clipboard.setData(ClipboardData(text: _token));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Session ID "$_token" copied!'),
-                            duration: const Duration(seconds: 2),
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+              // ── REAL SCANNABLE QR CODE CONTAINER (OR AUTO-LOADED CONFIRMATION) ──
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: _isScanned
+                    ? Container(
+                        key: const ValueKey('scanned_state'),
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 18),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFF1F5F9),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: const Color(0xFFCBD5E1), width: 0.9),
+                          color: const Color(0xFFF0FDF4),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: const Color(0xFF86EFAC),
+                            width: 1.4,
+                          ),
                         ),
-                        child: Row(
+                        child: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(Icons.tag_rounded, size: 12, color: Color(0xFF0052FF)),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Session ID: $_token',
-                              style: const TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF0F172A),
-                                letterSpacing: 0.4,
+                            Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: const BoxDecoration(
+                                color: Color(0xFFDCFCE7),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(
+                                Icons.check_circle_rounded,
+                                color: Color(0xFF16A34A),
+                                size: 48,
                               ),
                             ),
-                            const SizedBox(width: 5),
-                            const Icon(Icons.copy_rounded, size: 12, color: Color(0xFF64748B)),
+                            const SizedBox(height: 14),
+                            const Text(
+                              'Session Loaded! 🏏',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 19,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFF0F172A),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            const Text(
+                              'Get ready to bat! Closing automatically...',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF15803D),
+                              ),
+                            ),
+                          ],
+                        ),
+                      )
+                    : Container(
+                        key: const ValueKey('qr_state'),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(
+                            color: const Color(0xFFE2E8F0),
+                            width: 1.2,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF0052FF).withValues(alpha: 0.08),
+                              blurRadius: 14,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(10),
+                              child: QrImageView(
+                                data: qrDataText,
+                                version: QrVersions.auto,
+                                size: 185.0,
+                                backgroundColor: Colors.white,
+                                eyeStyle: const QrEyeStyle(
+                                  eyeShape: QrEyeShape.square,
+                                  color: Color(0xFF0F172A),
+                                ),
+                                dataModuleStyle: const QrDataModuleStyle(
+                                  dataModuleShape: QrDataModuleShape.square,
+                                  color: Color(0xFF0F172A),
+                                ),
+                                errorCorrectionLevel: QrErrorCorrectLevel.L,
+                                errorStateBuilder: (ctx, err) => const SizedBox(
+                                  width: 185,
+                                  height: 185,
+                                  child: Center(
+                                    child: Text(
+                                      'Use Session ID below\nto load session',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            // Machine pairing ID tag
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3.5),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEFF6FF),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                'ID: $_code • $_speedStr',
+                                style: const TextStyle(
+                                  fontSize: 10.5,
+                                  fontWeight: FontWeight.w800,
+                                  color: Color(0xFF0052FF),
+                                  letterSpacing: 0.4,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            // Tap to copy Session ID (Operator fallback for camera glare)
+                            GestureDetector(
+                              onTap: () {
+                                Clipboard.setData(ClipboardData(text: _token));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Session ID "$_token" copied!'),
+                                    duration: const Duration(seconds: 2),
+                                    behavior: SnackBarBehavior.floating,
+                                  ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF1F5F9),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: const Color(0xFFCBD5E1), width: 0.9),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.tag_rounded, size: 12, color: Color(0xFF0052FF)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Session ID: $_token',
+                                      style: const TextStyle(
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w800,
+                                        color: Color(0xFF0F172A),
+                                        letterSpacing: 0.4,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 5),
+                                    const Icon(Icons.copy_rounded, size: 12, color: Color(0xFF64748B)),
+                                  ],
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                    ),
-                  ],
-                ),
               ),
 
               const SizedBox(height: 12),
@@ -2226,10 +2224,7 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
                   // Done Button
                   Expanded(
                     child: GestureDetector(
-                      onTap: () {
-                        _cancelTimer();
-                        widget.onDone();
-                      },
+                      onTap: _finishDialog,
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 12),
                         decoration: BoxDecoration(
