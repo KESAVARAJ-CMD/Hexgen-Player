@@ -25,6 +25,8 @@ class SessionItem {
   final bool isUpcoming;
   final List<Map<String, dynamic>> overs;
   final String sessionToken;
+  final int intervalBetweenBalls;
+  final int intervalBetweenOvers;
 
   /// Standardized 17-character unique Session ID (e.g. HEX-2026-9F8A1B7C)
   static String generateSessionId() {
@@ -53,6 +55,8 @@ class SessionItem {
     this.isUpcoming = false,
     required this.overs,
     String? sessionToken,
+    this.intervalBetweenBalls = 5,
+    this.intervalBetweenOvers = 10,
   }) : sessionToken = sessionToken ?? generateSessionId();
 
   Map<String, dynamic> toJson() => {
@@ -75,6 +79,8 @@ class SessionItem {
     'level': level,
     'isUpcoming': isUpcoming,
     'overs': overs,
+    'intervalBetweenBalls': intervalBetweenBalls,
+    'intervalBetweenOvers': intervalBetweenOvers,
   };
 
   factory SessionItem.fromJson(Map<String, dynamic> json) => SessionItem(
@@ -99,6 +105,12 @@ class SessionItem {
             ?.map((e) => Map<String, dynamic>.from(e as Map))
             .toList() ??
         [],
+    intervalBetweenBalls: (json['intervalBetweenBalls'] as num?)?.toInt() ??
+        (json['interval_between_balls'] as num?)?.toInt() ??
+        5,
+    intervalBetweenOvers: (json['intervalBetweenOvers'] as num?)?.toInt() ??
+        (json['interval_between_overs'] as num?)?.toInt() ??
+        10,
   );
 
   SessionItem copyWith({
@@ -120,6 +132,8 @@ class SessionItem {
     String? level,
     bool? isUpcoming,
     List<Map<String, dynamic>>? overs,
+    int? intervalBetweenBalls,
+    int? intervalBetweenOvers,
   }) {
     return SessionItem(
       id: id ?? this.id,
@@ -140,6 +154,8 @@ class SessionItem {
       level: level ?? this.level,
       isUpcoming: isUpcoming ?? this.isUpcoming,
       overs: overs ?? this.overs,
+      intervalBetweenBalls: intervalBetweenBalls ?? this.intervalBetweenBalls,
+      intervalBetweenOvers: intervalBetweenOvers ?? this.intervalBetweenOvers,
     );
   }
 
@@ -238,6 +254,8 @@ class SessionsService extends ChangeNotifier {
           'mobile_number': playerMobile,
           'session_name': item.name,
           'num_overs': apiOvers.isNotEmpty ? apiOvers.length : 1,
+          'intervalBetweenBalls': item.intervalBetweenBalls,
+          'intervalBetweenOvers': item.intervalBetweenOvers,
           'sessionId': item.sessionToken,
           'sessionToken': item.sessionToken,
           'player': {
@@ -249,6 +267,8 @@ class SessionsService extends ChangeNotifier {
             'name': item.name,
             'oversCount': apiOvers.isNotEmpty ? apiOvers.length : 1,
             'numOvers': apiOvers.isNotEmpty ? apiOvers.length : 1,
+            'intervalBetweenBalls': item.intervalBetweenBalls,
+            'intervalBetweenOvers': item.intervalBetweenOvers,
           },
           'overs': apiOvers.isNotEmpty ? apiOvers : item.overs,
         }),

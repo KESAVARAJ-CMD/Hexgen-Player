@@ -211,6 +211,8 @@ class _SessionsTabState extends State<SessionsTab> {
         bowlerType: item.bowlerType,
         length: item.length,
         variation: item.variation,
+        intervalBetweenBalls: item.intervalBetweenBalls,
+        intervalBetweenOvers: item.intervalBetweenOvers,
         machineId: 'HEX-${item.id.replaceAll(RegExp(r'[^0-9]'), '').padLeft(4, '0')}',
         onDone: () {
           _handledCompletedSessionIds.add(item.id);

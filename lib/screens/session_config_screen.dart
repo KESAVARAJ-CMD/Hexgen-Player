@@ -103,6 +103,8 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
     final s = widget.sessionToEdit ?? widget.templateSession;
     if (s != null) {
       _sessionNameController.text = s.name.isNotEmpty ? s.name : 'Practice';
+      _intervalBetweenBalls = s.intervalBetweenBalls;
+      _intervalBetweenOvers = s.intervalBetweenOvers;
 
       final speedVal = double.tryParse(s.speed.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 50.0;
 
@@ -421,6 +423,8 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
         direction: _currentConfig.selectedDirection,
         level: _selectedLevel,
         overs: generatedOvers,
+        intervalBetweenBalls: _intervalBetweenBalls,
+        intervalBetweenOvers: _intervalBetweenOvers,
       );
 
       await SessionsService().updateSession(updatedSession);
@@ -433,6 +437,8 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
         builder: (ctx) => SessionQrShareDialog(
           sessionItem: updatedSession,
           machineId: machineId,
+          intervalBetweenBalls: _intervalBetweenBalls,
+          intervalBetweenOvers: _intervalBetweenOvers,
           onDone: () {
             Navigator.pop(ctx); // Close dialog
             Navigator.pop(context, true); // Close SessionConfigScreen
@@ -464,6 +470,8 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
       level: _selectedLevel,
       isUpcoming: true,
       overs: generatedOvers,
+      intervalBetweenBalls: _intervalBetweenBalls,
+      intervalBetweenOvers: _intervalBetweenOvers,
     );
 
     // Save persistently into SessionsService and sync with Cloud
@@ -477,6 +485,8 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
       builder: (ctx) => SessionQrShareDialog(
         sessionItem: savedSession,
         machineId: machineId,
+        intervalBetweenBalls: _intervalBetweenBalls,
+        intervalBetweenOvers: _intervalBetweenOvers,
         onDone: () {
           Navigator.pop(ctx); // Close dialog
           Navigator.pop(context, true); // Close SessionConfigScreen
@@ -1694,6 +1704,8 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
   String get _var => widget.sessionItem?.variation ?? widget.variation;
   String get _code => widget.machineId ?? 'HEX-${(_title.hashCode.abs() % 9000 + 1000)}';
   String get _token => widget.sessionItem?.sessionToken ?? widget.sessionToken ?? SessionItem.generateSessionId();
+  int get _ballsInterval => widget.sessionItem?.intervalBetweenBalls ?? widget.intervalBetweenBalls;
+  int get _oversInterval => widget.sessionItem?.intervalBetweenOvers ?? widget.intervalBetweenOvers;
 
   // ── ONE6 STANDARD ENUM NORMALIZERS (Exact Match to Machine Java Backend) ───
   static String _normalizeArm(String? arm) {
@@ -1856,6 +1868,8 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
       "version": "1.0",
       "sessionId": _token,
       "sessionToken": _token,
+      "intervalBetweenBalls": _ballsInterval,
+      "intervalBetweenOvers": _oversInterval,
       "player": {
         "name": _resolvedPlayerName.trim().isNotEmpty ? _resolvedPlayerName : "Player",
         "mobile": _resolvedPlayerMobile.trim().isNotEmpty ? _resolvedPlayerMobile : "9876543210",
@@ -1865,10 +1879,8 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
         "name": _title.trim().isNotEmpty ? _title : "Practice Session",
         "numOvers": oversPayload.length,
         "oversCount": oversPayload.length,
-        "intervalBetweenBalls": widget.intervalBetweenBalls,
-        "interval_between_balls": widget.intervalBetweenBalls,
-        "intervalBetweenOvers": widget.intervalBetweenOvers,
-        "interval_between_overs": widget.intervalBetweenOvers,
+        "intervalBetweenBalls": _ballsInterval,
+        "intervalBetweenOvers": _oversInterval,
       },
       "overs": oversPayload,
     };
