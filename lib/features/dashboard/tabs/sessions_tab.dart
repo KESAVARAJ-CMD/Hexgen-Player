@@ -1001,47 +1001,6 @@ class _SessionsTabState extends State<SessionsTab> {
 
                     const SizedBox(width: 6),
 
-                    // Mark as Played
-                    GestureDetector(
-                      onTap: () async {
-                        await _sessionsService.markAsPlayed(item.id);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('${item.title} moved to Past Sessions!'),
-                              backgroundColor: AppTheme.navyBlue,
-                              behavior: SnackBarBehavior.floating,
-                            ),
-                          );
-                        }
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(10),
-                          border: Border.all(color: const Color(0xFFCBD5E1)),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.check_rounded, size: 16, color: Color(0xFF0F172A)),
-                            SizedBox(width: 4),
-                            Text(
-                              'Done',
-                              style: TextStyle(
-                                fontSize: 11.5,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF0F172A),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(width: 6),
-
                     // Delete Button
                     GestureDetector(
                       onTap: () => _confirmDeleteSession(item.id, item.name),
