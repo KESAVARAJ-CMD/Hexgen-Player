@@ -141,7 +141,7 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
           }
           if (overMap['bowlerType'] != null) {
             final bStr = overMap['bowlerType'].toString().toUpperCase();
-            overBowlerType = bStr.contains('SPIN') ? 'Spin' : 'Pace';
+            overBowlerType = (bStr.contains('SPIN') || bStr.contains('WRIST')) ? 'Spin' : 'Pace';
           } else if (overMap['type'] != null) {
             final typeStr = overMap['type'].toString();
             if (typeStr.contains('Spin')) {
@@ -175,10 +175,21 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
             final uVar = overVariation.toUpperCase();
             if (uVar.contains('LEG')) {
               overVariation = 'Leg Spin';
-            } else if (uVar.contains('STRAIGHT')) {
+            } else if (uVar.contains('STRAIGHT') || uVar == 'NONE') {
               overVariation = 'Straight';
             } else {
               overVariation = 'Off Spin';
+            }
+          }
+        } else {
+          if (overVariation != 'Straight' && overVariation != 'Swing' && overVariation != 'Seam') {
+            final uVar = overVariation.toUpperCase();
+            if (uVar.contains('SEAM')) {
+              overVariation = 'Seam';
+            } else if (uVar.contains('STRAIGHT') || uVar == 'NONE') {
+              overVariation = 'Straight';
+            } else {
+              overVariation = 'Swing';
             }
           }
         }
@@ -1720,16 +1731,16 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
     if (normBowler == "PACE") {
       if (variation == null) return "SWING";
       final upper = variation.toUpperCase();
-      if (upper.contains("STRAIGHT")) return "STRAIGHT";
+      if (upper.contains("STRAIGHT") || upper == "NONE" || upper.isEmpty) return "NONE";
       if (upper.contains("SEAM")) return "SEAM";
       return "SWING";
     } else {
-      // Spin variations: OFFSPIN, LEGSPIN, STRAIGHT
-      if (variation == null) return "STRAIGHT";
+      // Spin variations: OFFSPIN, LEGSPIN, NONE (VariationType enum)
+      if (variation == null) return "NONE";
       final upper = variation.toUpperCase();
       if (upper.contains("OFF")) return "OFFSPIN";
       if (upper.contains("LEG")) return "LEGSPIN";
-      if (upper.contains("STRAIGHT")) return "STRAIGHT";
+      if (upper.contains("STRAIGHT") || upper == "NONE" || upper.isEmpty) return "NONE";
       return upper.replaceAll('_', '').replaceAll(' ', '');
     }
   }

@@ -359,8 +359,8 @@ class SessionsService extends ChangeNotifier {
 
       String normVar = 'SWING';
       if (normBowler == 'PACE') {
-        if (upperVar.contains('STRAIGHT')) {
-          normVar = 'STRAIGHT';
+        if (upperVar.contains('STRAIGHT') || upperVar == 'NONE' || upperVar.isEmpty) {
+          normVar = 'NONE';
         } else if (upperVar.contains('SEAM')) {
           normVar = 'SEAM';
         } else {
@@ -372,7 +372,7 @@ class SessionsService extends ChangeNotifier {
         } else if (upperVar.contains('LEG')) {
           normVar = 'LEGSPIN';
         } else {
-          normVar = 'STRAIGHT';
+          normVar = 'NONE';
         }
       }
 
@@ -877,20 +877,33 @@ class SessionsService extends ChangeNotifier {
                     final bType = (o['bowler_type'] ?? o['bowlerType'] ?? 'PACE').toString();
                     final aType = (o['arm_type'] ?? o['armType'] ?? 'RIGHT').toString();
                     final len = (o['length'] ?? 'GOOD').toString();
-                    final vari = (o['variation'] ?? 'SWING').toString();
+                    final rawVari = (o['variation'] ?? 'SWING').toString();
+                    final uVari = rawVari.toUpperCase();
+                    final String displayVari = (uVari == 'NONE' || uVari.contains('STRAIGHT'))
+                        ? 'Straight'
+                        : (uVari.contains('SEAM')
+                            ? 'Seam'
+                            : (uVari.contains('OFF')
+                                ? 'Off Spin'
+                                : (uVari.contains('LEG')
+                                    ? 'Leg Spin'
+                                    : (uVari.contains('SWING') ? 'Swing' : rawVari))));
                     final dir = (o['direction'] ?? 'OUT').toString();
                     final sLvl = (o['spin_level'] ?? o['spinLevel'] ?? o['level'] ?? 'BASIC').toString();
                     final lineNo = (o['line_no'] ?? o['lineNo'] ?? 3);
+                    final displayBowler = (bType.toUpperCase().contains('SPIN') || bType.toUpperCase().contains('WRIST'))
+                        ? 'Spin'
+                        : 'Pace';
 
                     parsedBookedOvers.add({
                       'over': 'Over ${oNum.toString().padLeft(2, '0')}',
-                      'summary': '6 Balls • ${spd.toStringAsFixed(1)} km/h • $vari',
+                      'summary': '6 Balls • ${spd.toStringAsFixed(1)} km/h • $displayVari',
                       'speed': '${spd.toStringAsFixed(1)} km/h',
-                      'type': '$bType - $vari',
+                      'type': '$displayBowler - $displayVari',
                       'armType': aType.toUpperCase().contains('LEFT') ? 'Left Arm' : 'Right Arm',
-                      'bowlerType': bType.toUpperCase().contains('SPIN') ? 'Spin' : 'Pace',
+                      'bowlerType': displayBowler,
                       'length': len,
-                      'variation': vari,
+                      'variation': displayVari,
                       'direction': dir.toUpperCase().contains('IN') ? 'In' : 'Out',
                       'level': sLvl.toUpperCase().contains('HIGH')
                           ? 'High'
