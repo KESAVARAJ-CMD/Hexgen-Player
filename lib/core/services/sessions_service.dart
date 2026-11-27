@@ -220,9 +220,23 @@ class SessionsService extends ChangeNotifier {
     // Call Cloud POST /api/v1/sessions/create (with offline fallback)
     try {
       final prefs = await SharedPreferences.getInstance();
-      final playerName = prefs.getString('user_name') ?? prefs.getString('player_name') ?? item.name;
-      final playerMobile = prefs.getString('user_phone') ?? prefs.getString('mobile_number') ?? '9876543210';
-      final playerId = prefs.getString('player_id') ?? 'USR-101';
+      final rawName = prefs.getString('player_name') ??
+          prefs.getString('user_name') ??
+          '';
+      final playerName = rawName.trim().isNotEmpty
+          ? rawName.trim()
+          : (item.name.trim().isNotEmpty ? item.name.trim() : 'Player');
+
+      final rawMobile = prefs.getString('player_phone') ??
+          prefs.getString('user_phone') ??
+          prefs.getString('mobile_number') ??
+          '';
+      final playerMobile = rawMobile.trim().length >= 5
+          ? rawMobile.trim()
+          : '9876543210';
+
+      final rawPlayerId = prefs.getString('player_id') ?? '';
+      final playerId = rawPlayerId.trim().isNotEmpty ? rawPlayerId.trim() : 'USR-101';
 
       final List<Map<String, dynamic>> apiOvers = [];
       for (int i = 0; i < item.overs.length; i++) {
@@ -273,52 +287,65 @@ class SessionsService extends ChangeNotifier {
         'delay_between_overs': item.intervalBetweenOvers,
       };
 
+      final requestBody = {
+        'player_id': playerId,
+        'player_name': playerName,
+        'mobile_number': playerMobile,
+        'session_name': item.name,
+        'num_overs': apiOvers.isNotEmpty ? apiOvers.length : 1,
+        'intervalBetweenBalls': item.intervalBetweenBalls,
+        'interval_between_balls': item.intervalBetweenBalls,
+        'intervalBalls': item.intervalBetweenBalls,
+        'interval_balls': item.intervalBetweenBalls,
+        'delayBetweenBalls': item.intervalBetweenBalls,
+        'delay_between_balls': item.intervalBetweenBalls,
+        'ballInterval': item.intervalBetweenBalls,
+        'ball_interval': item.intervalBetweenBalls,
+        'intervalBetweenOvers': item.intervalBetweenOvers,
+        'interval_between_overs': item.intervalBetweenOvers,
+        'intervalOvers': item.intervalBetweenOvers,
+        'interval_overs': item.intervalBetweenOvers,
+        'delayBetweenOvers': item.intervalBetweenOvers,
+        'delay_between_overs': item.intervalBetweenOvers,
+        'sessionId': item.sessionToken,
+        'sessionToken': item.sessionToken,
+        'session_id': item.sessionToken,
+        'player': {
+          'name': playerName,
+          'mobile': playerMobile,
+          'batsmanType': item.armType,
+        },
+        'session': sessionMap,
+        'sessionInfo': sessionMap,
+        'session_info': sessionMap,
+        'overs': apiOvers.isNotEmpty ? apiOvers : item.overs,
+      };
+
+      debugPrint(
+        '[SessionsService] POST ${ApiConstants.createSession} -> '
+        'intervalBetweenBalls=${item.intervalBetweenBalls}, '
+        'intervalBetweenOvers=${item.intervalBetweenOvers}',
+      );
+
       final response = await http.post(
         Uri.parse(ApiConstants.createSession),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'player_id': playerId,
-          'player_name': playerName,
-          'mobile_number': playerMobile,
-          'session_name': item.name,
-          'num_overs': apiOvers.isNotEmpty ? apiOvers.length : 1,
-          'intervalBetweenBalls': item.intervalBetweenBalls,
-          'interval_between_balls': item.intervalBetweenBalls,
-          'intervalBalls': item.intervalBetweenBalls,
-          'interval_balls': item.intervalBetweenBalls,
-          'delayBetweenBalls': item.intervalBetweenBalls,
-          'delay_between_balls': item.intervalBetweenBalls,
-          'ballInterval': item.intervalBetweenBalls,
-          'ball_interval': item.intervalBetweenBalls,
-          'intervalBetweenOvers': item.intervalBetweenOvers,
-          'interval_between_overs': item.intervalBetweenOvers,
-          'intervalOvers': item.intervalBetweenOvers,
-          'interval_overs': item.intervalBetweenOvers,
-          'delayBetweenOvers': item.intervalBetweenOvers,
-          'delay_between_overs': item.intervalBetweenOvers,
-          'sessionId': item.sessionToken,
-          'sessionToken': item.sessionToken,
-          'session_id': item.sessionToken,
-          'player': {
-            'name': playerName,
-            'mobile': playerMobile,
-            'batsmanType': item.armType,
-          },
-          'session': sessionMap,
-          'sessionInfo': sessionMap,
-          'session_info': sessionMap,
-          'overs': apiOvers.isNotEmpty ? apiOvers : item.overs,
-        }),
+        body: jsonEncode(requestBody),
       ).timeout(const Duration(seconds: 8));
+
+      debugPrint(
+        '[SessionsService] createSession status=${response.statusCode} body=${response.body}',
+      );
 
       if (response.statusCode == 200 || response.statusCode == 201) {
         final data = jsonDecode(response.body);
-        final cloudSessionId = data['sessionId'] ?? data['sessionToken'];
+        final cloudSessionId = data['sessionId'] ?? data['sessionToken'] ?? data['session_id'];
         if (cloudSessionId != null && cloudSessionId is String && cloudSessionId.isNotEmpty) {
           sessionToSave = item.copyWith(sessionToken: cloudSessionId);
         }
       }
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[SessionsService] createSession error: $e');
       // Offline fallback: retains the generated 17-char sessionToken
     }
 
