@@ -269,19 +269,22 @@ class _SessionsTabState extends State<SessionsTab> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await _sessionsService.deleteSessionById(sessionId);
+              final deleted = await _sessionsService.deleteSessionById(sessionId);
+              if (!mounted) return;
               setState(() {
                 _expandedSessionIndex = null;
               });
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('$sessionTitle deleted successfully'),
-                    behavior: SnackBarBehavior.floating,
-                    backgroundColor: AppTheme.navyBlue,
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    deleted
+                        ? '$sessionTitle deleted successfully'
+                        : '$sessionTitle was already played and cannot be deleted (moved to Past Sessions).',
                   ),
-                );
-              }
+                  behavior: SnackBarBehavior.floating,
+                  backgroundColor: deleted ? AppTheme.navyBlue : const Color(0xFFE11D48),
+                ),
+              );
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFEF4444),

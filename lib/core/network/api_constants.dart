@@ -27,6 +27,9 @@ class ApiConstants {
   // One6 Cricket Sessions (Cloud Backend Part 1)
   static String get createSession => '$baseUrl/v1/sessions/create';
   static String sessionLookup(String sessionId) => '$baseUrl/v1/sessions/$sessionId';
+  static String updateSession(String sessionId) => '$baseUrl/v1/sessions/$sessionId';
+  static String deleteSession(String sessionId) => '$baseUrl/v1/sessions/$sessionId';
   static String get completeSession => '$baseUrl/v1/sessions/complete';
   static String playerSessions(String mobile) => '$baseUrl/v1/sessions/player/$mobile';
+  static String userSessions(String mobile) => '$baseUrl/v1/sessions/user/$mobile';
 }

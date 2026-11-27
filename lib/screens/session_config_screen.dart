@@ -427,15 +427,27 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
         intervalBetweenOvers: _intervalBetweenOvers,
       );
 
-      await SessionsService().updateSession(updatedSession);
+      final savedUpdated = await SessionsService().updateSession(updatedSession);
 
       if (!mounted) return;
+
+      if (savedUpdated == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This session has already been played on the machine and cannot be edited.'),
+            backgroundColor: Color(0xFFE11D48),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+        Navigator.pop(context, false);
+        return;
+      }
 
       showDialog(
         context: context,
         barrierDismissible: false,
         builder: (ctx) => SessionQrShareDialog(
-          sessionItem: updatedSession,
+          sessionItem: savedUpdated,
           machineId: machineId,
           intervalBetweenBalls: _intervalBetweenBalls,
           intervalBetweenOvers: _intervalBetweenOvers,

@@ -238,32 +238,7 @@ class SessionsService extends ChangeNotifier {
       final rawPlayerId = prefs.getString('player_id') ?? '';
       final playerId = rawPlayerId.trim().isNotEmpty ? rawPlayerId.trim() : 'USR-101';
 
-      final List<Map<String, dynamic>> apiOvers = [];
-      for (int i = 0; i < item.overs.length; i++) {
-        final over = item.overs[i];
-        final rawSpeed = double.tryParse(over['speed'].toString().replaceAll(RegExp(r'[^0-9.]'), ''))?.round() ?? 90;
-        final bowler = over['bowlerType']?.toString() ?? 'PACE';
-        final arm = over['armType']?.toString() ?? 'RIGHT';
-        final len = over['length']?.toString() ?? 'GOOD';
-        final varVal = over['variation']?.toString() ?? 'SWING';
-        final lineNo = int.tryParse((over['lineNo'] ?? over['session_line'] ?? '3').toString()) ?? 3;
-
-        apiOvers.add({
-          'over_number': i + 1,
-          'speed': rawSpeed,
-          'bowler_type': bowler.toUpperCase().contains('SPIN') ? 'SPIN' : 'PACE',
-          'arm_type': arm.toUpperCase().contains('LEFT') ? 'LEFT' : 'RIGHT',
-          'length': len.toUpperCase(),
-          'line_no': lineNo,
-          'variation': varVal.toUpperCase().replaceAll(' ', ''),
-          'intervalBetweenBalls': item.intervalBetweenBalls,
-          'interval_between_balls': item.intervalBetweenBalls,
-          'delayBetweenBalls': item.intervalBetweenBalls,
-          'intervalBetweenOvers': item.intervalBetweenOvers,
-          'interval_between_overs': item.intervalBetweenOvers,
-          'delayBetweenOvers': item.intervalBetweenOvers,
-        });
-      }
+      final apiOvers = _buildApiOvers(item);
 
       final sessionMap = {
         'name': item.name,
@@ -356,13 +331,104 @@ class SessionsService extends ChangeNotifier {
     return sessionToSave;
   }
 
-  Future<void> updateSession(SessionItem updatedItem) async {
-    final idx = _sessions.indexWhere((s) => s.id == updatedItem.id);
+  List<Map<String, dynamic>> _buildApiOvers(SessionItem item) {
+    final List<Map<String, dynamic>> apiOvers = [];
+    for (int i = 0; i < item.overs.length; i++) {
+      final over = item.overs[i];
+      final rawSpeed = double.tryParse(over['speed'].toString().replaceAll(RegExp(r'[^0-9.]'), ''))?.round() ?? 90;
+      final bowler = over['bowlerType']?.toString() ?? 'PACE';
+      final arm = over['armType']?.toString() ?? 'RIGHT';
+      final len = over['length']?.toString() ?? 'GOOD';
+      final varVal = over['variation']?.toString() ?? 'SWING';
+      final lineNo = int.tryParse((over['lineNo'] ?? over['session_line'] ?? '3').toString()) ?? 3;
+
+      apiOvers.add({
+        'over_number': i + 1,
+        'speed': rawSpeed,
+        'bowler_type': bowler.toUpperCase().contains('SPIN') ? 'SPIN' : 'PACE',
+        'arm_type': arm.toUpperCase().contains('LEFT') ? 'LEFT' : 'RIGHT',
+        'length': len.toUpperCase(),
+        'line_no': lineNo,
+        'variation': varVal.toUpperCase().replaceAll(' ', ''),
+        'intervalBetweenBalls': item.intervalBetweenBalls,
+        'interval_between_balls': item.intervalBetweenBalls,
+        'delayBetweenBalls': item.intervalBetweenBalls,
+        'intervalBetweenOvers': item.intervalBetweenOvers,
+        'interval_between_overs': item.intervalBetweenOvers,
+        'delayBetweenOvers': item.intervalBetweenOvers,
+      });
+    }
+    return apiOvers;
+  }
+
+  /// Updates an upcoming session in Cloud Neon DB via PUT /api/v1/sessions/{sessionId}
+  /// and saves locally. Returns the updated SessionItem, or null if rejected because already completed.
+  Future<SessionItem?> updateSession(SessionItem updatedItem) async {
+    SessionItem sessionToSave = updatedItem;
+
+    if (updatedItem.isUpcoming && updatedItem.sessionToken.isNotEmpty) {
+      try {
+        final apiOvers = _buildApiOvers(updatedItem);
+        final numOvers = apiOvers.isNotEmpty ? apiOvers.length : 1;
+
+        final requestBody = {
+          'session_name': updatedItem.name,
+          'num_overs': numOvers,
+          'intervalBetweenBalls': updatedItem.intervalBetweenBalls,
+          'interval_between_balls': updatedItem.intervalBetweenBalls,
+          'intervalBetweenOvers': updatedItem.intervalBetweenOvers,
+          'interval_between_overs': updatedItem.intervalBetweenOvers,
+          'overs': apiOvers.isNotEmpty ? apiOvers : updatedItem.overs,
+          'session': {
+            'name': updatedItem.name,
+            'oversCount': numOvers,
+            'numOvers': numOvers,
+            'intervalBetweenBalls': updatedItem.intervalBetweenBalls,
+            'intervalBetweenOvers': updatedItem.intervalBetweenOvers,
+          },
+        };
+
+        final url = ApiConstants.updateSession(updatedItem.sessionToken);
+        debugPrint('[SessionsService] PUT $url -> name=${updatedItem.name}, overs=$numOvers');
+
+        final res = await http
+            .put(
+              Uri.parse(url),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode(requestBody),
+            )
+            .timeout(const Duration(seconds: 8));
+
+        debugPrint('[SessionsService] updateSession status=${res.statusCode} body=${res.body}');
+
+        if (res.statusCode == 400 || res.statusCode == 403 || res.statusCode == 409) {
+          // Already played / COMPLETED on cloud — cannot edit
+          await markAsPlayed(updatedItem.id);
+          return null;
+        }
+
+        if (res.statusCode == 200) {
+          try {
+            final data = jsonDecode(res.body);
+            final cloudSessionId = data['sessionId'] ?? data['sessionToken'] ?? data['session_id'];
+            if (cloudSessionId != null && cloudSessionId is String && cloudSessionId.isNotEmpty) {
+              sessionToSave = updatedItem.copyWith(sessionToken: cloudSessionId);
+            }
+          } catch (_) {}
+        }
+      } catch (e) {
+        debugPrint('[SessionsService] updateSession error: $e');
+        // Offline / fallback: still update locally
+      }
+    }
+
+    final idx = _sessions.indexWhere((s) => s.id == sessionToSave.id);
     if (idx != -1) {
-      _sessions[idx] = updatedItem;
+      _sessions[idx] = sessionToSave;
       notifyListeners();
       await _saveToPrefs();
     }
+    return sessionToSave;
   }
 
   /// Switch to a new player, immediately wipe old player's past sessions, and fetch new player's cloud sessions
@@ -682,8 +748,114 @@ class SessionsService extends ChangeNotifier {
 
       // Preserve local upcoming sessions for this player, replace past sessions with ONLY this player's cloud sessions
       final upcoming = _sessions.where((s) => s.isUpcoming).toList();
+
+      // 3. SYNC BOOKED SESSIONS via GET /api/v1/sessions/user/{mobile_number}
+      if (phone.isNotEmpty) {
+        try {
+          final digits = phone.replaceAll(RegExp(r'\D'), '');
+          final last10 = digits.length > 10 ? digits.substring(digits.length - 10) : digits;
+          if (last10.isNotEmpty) {
+            final userRes = await http
+                .get(
+                  Uri.parse(ApiConstants.userSessions(last10)),
+                  headers: {'Accept': 'application/json'},
+                )
+                .timeout(const Duration(seconds: 6));
+
+            if (userRes.statusCode == 200) {
+              final decoded = jsonDecode(userRes.body);
+              final List<dynamic> rawBooked = [];
+              if (decoded is List) {
+                rawBooked.addAll(decoded);
+              } else if (decoded is Map) {
+                if (decoded['upcoming'] is List) rawBooked.addAll(decoded['upcoming']);
+                if (decoded['sessions'] is List) rawBooked.addAll(decoded['sessions']);
+              }
+
+              for (final b in rawBooked) {
+                if (b is! Map) continue;
+                final bMap = Map<String, dynamic>.from(b);
+                final token = (bMap['sessionId'] ?? bMap['sessionToken'] ?? bMap['session_id'] ?? '').toString();
+                if (token.isEmpty) continue;
+
+                final status = (bMap['status'] ?? bMap['sessionStatus'] ?? '').toString().toUpperCase();
+                final isCompleted = status == 'COMPLETED' || status == 'CONSUMED';
+
+                final localIdx = upcoming.indexWhere((u) => u.sessionToken == token);
+                if (isCompleted) {
+                  if (localIdx != -1) {
+                    upcoming[localIdx] = upcoming[localIdx].copyWith(isUpcoming: false);
+                  }
+                } else if (localIdx == -1) {
+                  // Booked session exists in cloud (e.g. booked from another device) and is READY_TO_BOWL
+                  final rawOvers = (bMap['overs'] as List<dynamic>?) ?? (bMap['overs_config'] as List<dynamic>?) ?? [];
+                  final numOvers = (bMap['num_overs'] as num?)?.toInt() ??
+                      (bMap['numOvers'] as num?)?.toInt() ??
+                      (rawOvers.isNotEmpty ? rawOvers.length : 1);
+                  final sName = (bMap['session_name'] ?? bMap['sessionName'] ?? bMap['name'] ?? 'Practice').toString();
+
+                  final List<Map<String, dynamic>> parsedBookedOvers = [];
+                  for (int idx = 0; idx < rawOvers.length; idx++) {
+                    final o = rawOvers[idx];
+                    if (o is! Map) continue;
+                    final oNum = (o['over_number'] ?? o['overNumber'] ?? (idx + 1));
+                    final spd = (o['speed'] as num?)?.toDouble() ?? 70.0;
+                    final bType = (o['bowler_type'] ?? o['bowlerType'] ?? 'PACE').toString();
+                    final aType = (o['arm_type'] ?? o['armType'] ?? 'RIGHT').toString();
+                    final len = (o['length'] ?? 'GOOD').toString();
+                    final vari = (o['variation'] ?? 'SWING').toString();
+                    final lineNo = (o['line_no'] ?? o['lineNo'] ?? 3);
+
+                    parsedBookedOvers.add({
+                      'over': 'Over ${oNum.toString().padLeft(2, '0')}',
+                      'summary': '6 Balls • ${spd.toStringAsFixed(1)} km/h • $vari',
+                      'speed': '${spd.toStringAsFixed(1)} km/h',
+                      'type': '$bType - $vari',
+                      'armType': aType.toUpperCase().contains('LEFT') ? 'Left Arm' : 'Right Arm',
+                      'bowlerType': bType.toUpperCase().contains('SPIN') ? 'Spin' : 'Pace',
+                      'length': len,
+                      'variation': vari,
+                      'lineNo': lineNo,
+                      'session_line': lineNo,
+                    });
+                  }
+
+                  final firstSpd = parsedBookedOvers.isNotEmpty
+                      ? (parsedBookedOvers.first['speed'] as String? ?? '70.0 km/h')
+                      : '70.0 km/h';
+
+                  upcoming.insert(
+                    0,
+                    SessionItem(
+                      id: 'SES-BKD-$token',
+                      sessionToken: token,
+                      title: sName,
+                      name: sName,
+                      date: 'Booked',
+                      time: 'Ready',
+                      oversCount: '$numOvers ${numOvers == 1 ? "Over" : "Overs"}',
+                      speed: firstSpd,
+                      isUpcoming: true,
+                      overs: parsedBookedOvers,
+                      intervalBetweenBalls: (bMap['intervalBetweenBalls'] as num?)?.toInt() ??
+                          (bMap['interval_between_balls'] as num?)?.toInt() ??
+                          5,
+                      intervalBetweenOvers: (bMap['intervalBetweenOvers'] as num?)?.toInt() ??
+                          (bMap['interval_between_overs'] as num?)?.toInt() ??
+                          10,
+                    ),
+                  );
+                }
+              }
+            }
+          }
+        } catch (e) {
+          debugPrint('[SessionsService] userSessions sync skipped: $e');
+        }
+      }
+
       _sessions.clear();
-      _sessions.addAll(upcoming);
+      _sessions.addAll(upcoming.where((s) => s.isUpcoming));
       _sessions.addAll(playerCloudSessions);
 
       notifyListeners();
@@ -693,13 +865,37 @@ class SessionsService extends ChangeNotifier {
     }
   }
 
-  Future<void> deleteSession(String id) async {
+  /// Deletes a session. If it is an Upcoming session, also calls DELETE /api/v1/sessions/{sessionId}
+  /// on Cloud Neon DB. Returns false if cloud rejected deletion because session is already COMPLETED.
+  Future<bool> deleteSession(String id) async {
+    final idx = _sessions.indexWhere((s) => s.id == id);
+    final target = idx != -1 ? _sessions[idx] : null;
+
+    if (target != null && target.isUpcoming && target.sessionToken.isNotEmpty) {
+      try {
+        final url = ApiConstants.deleteSession(target.sessionToken);
+        debugPrint('[SessionsService] DELETE $url');
+        final res = await http.delete(Uri.parse(url)).timeout(const Duration(seconds: 8));
+        debugPrint('[SessionsService] deleteSession status=${res.statusCode} body=${res.body}');
+
+        if (res.statusCode == 400 || res.statusCode == 403 || res.statusCode == 409) {
+          // Already played / COMPLETED on cloud — cannot delete; move to past locally
+          await markAsPlayed(id);
+          return false;
+        }
+      } catch (e) {
+        debugPrint('[SessionsService] deleteSession cloud error: $e');
+        // Offline fallback: proceed with local deletion
+      }
+    }
+
     _sessions.removeWhere((s) => s.id == id);
     notifyListeners();
     await _saveToPrefs();
+    return true;
   }
 
-  Future<void> deleteSessionById(String id) => deleteSession(id);
+  Future<bool> deleteSessionById(String id) => deleteSession(id);
 
   Future<void> markAsPlayed(String id) async {
     final idx = _sessions.indexWhere((s) => s.id == id);
