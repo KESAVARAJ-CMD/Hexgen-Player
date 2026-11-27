@@ -1806,33 +1806,22 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
         final normLine = int.tryParse((over['lineNo'] ?? over['session_line'] ?? '3').toString()) ?? 3;
         final normVariation = _normalizeVariation(bowler, variation);
 
-        oversPayload.add({
+        final overMap = <String, dynamic>{
           "overNumber": i + 1,
-          "over_number": i + 1,
           "armType": normArm,
-          "arm_type": normArm,
           "bowlerType": normBowler,
-          "bowler_type": normBowler,
           "speed": speedInt,
           "length": normLength,
           "lineNo": normLine,
-          "line_no": normLine,
           "variation": normVariation,
           "direction": _normalizeDirection(direction),
           "spinLevel": _normalizeSpinLevel(spinLevel),
-          "intervalBetweenBalls": _ballsInterval,
-          "interval_between_balls": _ballsInterval,
-          "delayBetweenBalls": _ballsInterval,
-          "intervalBalls": _ballsInterval,
-          "intervalBetweenOvers": _oversInterval,
-          "interval_between_overs": _oversInterval,
-          "delayBetweenOvers": _oversInterval,
-          "intervalOvers": _oversInterval,
-          "drift": over['drift'] as bool? ?? false,
-          "randomLineLength": over['randomLength'] as bool? ?? false,
-          "randomSpeed": over['randomSpeed'] as bool? ?? false,
-          "randomSpinSwing": over['randomSpin'] as bool? ?? false,
-        });
+        };
+        if (over['drift'] == true) overMap["drift"] = true;
+        if (over['randomLength'] == true) overMap["randomLineLength"] = true;
+        if (over['randomSpeed'] == true) overMap["randomSpeed"] = true;
+        if (over['randomSpin'] == true) overMap["randomSpinSwing"] = true;
+        oversPayload.add(overMap);
       }
     } else {
       final speedInt = widget.speed != null
@@ -1851,100 +1840,35 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
 
         oversPayload.add({
           "overNumber": i,
-          "over_number": i,
           "armType": normArm,
-          "arm_type": normArm,
           "bowlerType": normBowler,
-          "bowler_type": normBowler,
           "speed": speedInt,
           "length": normLength,
           "lineNo": 3,
-          "line_no": 3,
           "variation": normVariation,
           "direction": _normalizeDirection(widget.sessionItem?.direction ?? 'Out'),
           "spinLevel": _normalizeSpinLevel(widget.sessionItem?.level ?? 'Medium'),
-          "intervalBetweenBalls": _ballsInterval,
-          "interval_between_balls": _ballsInterval,
-          "delayBetweenBalls": _ballsInterval,
-          "intervalBalls": _ballsInterval,
-          "intervalBetweenOvers": _oversInterval,
-          "interval_between_overs": _oversInterval,
-          "delayBetweenOvers": _oversInterval,
-          "intervalOvers": _oversInterval,
-          "drift": false,
-          "randomLineLength": false,
-          "randomSpeed": false,
-          "randomSpinSwing": false,
         });
       }
     }
-
-    final sessionMap = {
-      "name": _title.trim().isNotEmpty ? _title : "Practice Session",
-      "sessionName": _title.trim().isNotEmpty ? _title : "Practice Session",
-      "session_name": _title.trim().isNotEmpty ? _title : "Practice Session",
-      "numOvers": oversPayload.length,
-      "num_overs": oversPayload.length,
-      "oversCount": oversPayload.length,
-      "overs_count": oversPayload.length,
-      "totalOvers": oversPayload.length,
-      "total_overs": oversPayload.length,
-      "intervalBetweenBalls": _ballsInterval,
-      "interval_between_balls": _ballsInterval,
-      "intervalBalls": _ballsInterval,
-      "interval_balls": _ballsInterval,
-      "interval_ball": _ballsInterval,
-      "delayBetweenBalls": _ballsInterval,
-      "delay_between_balls": _ballsInterval,
-      "ballInterval": _ballsInterval,
-      "ball_interval": _ballsInterval,
-      "intervalBetweenOvers": _oversInterval,
-      "interval_between_overs": _oversInterval,
-      "intervalOvers": _oversInterval,
-      "interval_overs": _oversInterval,
-      "interval_over": _oversInterval,
-      "delayBetweenOvers": _oversInterval,
-      "delay_between_overs": _oversInterval,
-      "overInterval": _oversInterval,
-      "over_interval": _oversInterval,
-    };
 
     final Map<String, dynamic> payload = {
       "type": "ONE6_SESSION",
       "version": "1.0",
       "sessionId": _token,
-      "sessionToken": _token,
-      "session_id": _token,
       "intervalBetweenBalls": _ballsInterval,
-      "interval_between_balls": _ballsInterval,
-      "intervalBalls": _ballsInterval,
-      "interval_balls": _ballsInterval,
-      "delayBetweenBalls": _ballsInterval,
-      "delay_between_balls": _ballsInterval,
-      "ballInterval": _ballsInterval,
-      "ball_interval": _ballsInterval,
       "intervalBetweenOvers": _oversInterval,
-      "interval_between_overs": _oversInterval,
-      "intervalOvers": _oversInterval,
-      "interval_overs": _oversInterval,
-      "delayBetweenOvers": _oversInterval,
-      "delay_between_overs": _oversInterval,
-      "overInterval": _oversInterval,
-      "over_interval": _oversInterval,
       "player": {
         "name": _resolvedPlayerName.trim().isNotEmpty ? _resolvedPlayerName : "Player",
-        "playerName": _resolvedPlayerName.trim().isNotEmpty ? _resolvedPlayerName : "Player",
-        "player_name": _resolvedPlayerName.trim().isNotEmpty ? _resolvedPlayerName : "Player",
         "mobile": _resolvedPlayerMobile.trim().isNotEmpty ? _resolvedPlayerMobile : "9876543210",
-        "mobileNumber": _resolvedPlayerMobile.trim().isNotEmpty ? _resolvedPlayerMobile : "9876543210",
-        "mobile_number": _resolvedPlayerMobile.trim().isNotEmpty ? _resolvedPlayerMobile : "9876543210",
-        "phone": _resolvedPlayerMobile.trim().isNotEmpty ? _resolvedPlayerMobile : "9876543210",
         "batsmanType": _arm.toUpperCase().contains("LEFT") ? "Left Hand" : "Right Hand",
-        "batsman_type": _arm.toUpperCase().contains("LEFT") ? "LEFT" : "RIGHT",
       },
-      "session": sessionMap,
-      "sessionInfo": sessionMap,
-      "session_info": sessionMap,
+      "session": {
+        "name": _title.trim().isNotEmpty ? _title : "Practice Session",
+        "oversCount": oversPayload.length,
+        "intervalBetweenBalls": _ballsInterval,
+        "intervalBetweenOvers": _oversInterval,
+      },
       "overs": oversPayload,
     };
 
@@ -2119,7 +2043,18 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
                           dataModuleShape: QrDataModuleShape.square,
                           color: Color(0xFF0F172A),
                         ),
-                        errorCorrectionLevel: QrErrorCorrectLevel.M,
+                        errorCorrectionLevel: QrErrorCorrectLevel.L,
+                        errorStateBuilder: (ctx, err) => const SizedBox(
+                          width: 185,
+                          height: 185,
+                          child: Center(
+                            child: Text(
+                              'Use Session ID below\nto load session',
+                              textAlign: TextAlign.center,
+                              style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 8),
