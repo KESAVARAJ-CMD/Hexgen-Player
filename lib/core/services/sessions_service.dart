@@ -336,20 +336,94 @@ class SessionsService extends ChangeNotifier {
     for (int i = 0; i < item.overs.length; i++) {
       final over = item.overs[i];
       final rawSpeed = double.tryParse(over['speed'].toString().replaceAll(RegExp(r'[^0-9.]'), ''))?.round() ?? 90;
-      final bowler = over['bowlerType']?.toString() ?? 'PACE';
-      final arm = over['armType']?.toString() ?? 'RIGHT';
-      final len = over['length']?.toString() ?? 'GOOD';
-      final varVal = over['variation']?.toString() ?? 'SWING';
+      final bowlerRaw = (over['bowlerType'] ?? over['session_bowler_type'] ?? item.bowlerType).toString();
+      final armRaw = (over['armType'] ?? over['session_arm_type'] ?? item.armType).toString();
+      final lenRaw = (over['length'] ?? over['session_length'] ?? item.length).toString();
+      final varRaw = (over['variation'] ?? over['session_variation'] ?? item.variation).toString();
+      final dirRaw = (over['direction'] ?? item.direction).toString();
+      final lvlRaw = (over['level'] ?? over['spin_level'] ?? over['spinLevel'] ?? item.level).toString();
       final lineNo = int.tryParse((over['lineNo'] ?? over['session_line'] ?? '3').toString()) ?? 3;
+
+      final upperBowler = bowlerRaw.toUpperCase();
+      final upperVar = varRaw.toUpperCase();
+      String normBowler = 'PACE';
+      if (upperBowler.contains('OFF') || upperVar.contains('OFF')) {
+        normBowler = 'OFFSPIN';
+      } else if (upperBowler.contains('LEG') || upperVar.contains('LEG')) {
+        normBowler = 'LEGSPIN';
+      } else if (upperBowler.contains('WRIST')) {
+        normBowler = 'WRIST';
+      } else if (upperBowler.contains('SPIN')) {
+        normBowler = upperVar.contains('LEG') ? 'LEGSPIN' : 'OFFSPIN';
+      }
+
+      String normVar = 'SWING';
+      if (normBowler == 'PACE') {
+        if (upperVar.contains('STRAIGHT')) {
+          normVar = 'STRAIGHT';
+        } else if (upperVar.contains('SEAM')) {
+          normVar = 'SEAM';
+        } else {
+          normVar = 'SWING';
+        }
+      } else {
+        if (upperVar.contains('OFF')) {
+          normVar = 'OFFSPIN';
+        } else if (upperVar.contains('LEG')) {
+          normVar = 'LEGSPIN';
+        } else {
+          normVar = 'STRAIGHT';
+        }
+      }
+
+      final normArm = armRaw.toUpperCase().contains('LEFT') ? 'LEFT' : 'RIGHT';
+      String normLen = 'GOOD';
+      final upperLen = lenRaw.toUpperCase();
+      if (upperLen.contains('SLOT')) {
+        normLen = 'SLOT';
+      } else if (upperLen.contains('FULL')) {
+        normLen = 'FULL';
+      } else if (upperLen.contains('SHORT')) {
+        normLen = 'SHORT';
+      }
+
+      final normDirection = dirRaw.toUpperCase().contains('IN') ? 'IN' : 'OUT';
+
+      final upperLvl = lvlRaw.toUpperCase();
+      String normSpinLevel = 'BASIC';
+      if (upperLvl.contains('HIGH') || upperLvl.contains('ADV')) {
+        normSpinLevel = 'HIGH';
+      } else if (upperLvl.contains('MED')) {
+        normSpinLevel = 'MEDIUM';
+      }
+
+      final bool drift = over['drift'] == true;
+      final bool randomSpinSwing = over['randomSpin'] == true || over['randomSpinSwing'] == true;
+      final bool randomLineLength = over['randomLength'] == true || over['randomLineLength'] == true;
+      final bool randomSpeed = over['randomSpeed'] == true;
 
       apiOvers.add({
         'over_number': i + 1,
+        'overNumber': i + 1,
         'speed': rawSpeed,
-        'bowler_type': bowler.toUpperCase().contains('SPIN') ? 'SPIN' : 'PACE',
-        'arm_type': arm.toUpperCase().contains('LEFT') ? 'LEFT' : 'RIGHT',
-        'length': len.toUpperCase(),
+        'bowler_type': normBowler,
+        'bowlerType': normBowler,
+        'arm_type': normArm,
+        'armType': normArm,
+        'length': normLen,
         'line_no': lineNo,
-        'variation': varVal.toUpperCase().replaceAll(' ', ''),
+        'lineNo': lineNo,
+        'variation': normVar,
+        'direction': normDirection,
+        'spin_level': normSpinLevel,
+        'spinLevel': normSpinLevel,
+        'drift': drift,
+        'random_spin_swing': randomSpinSwing,
+        'randomSpinSwing': randomSpinSwing,
+        'random_line_length': randomLineLength,
+        'randomLineLength': randomLineLength,
+        'random_speed': randomSpeed,
+        'randomSpeed': randomSpeed,
         'intervalBetweenBalls': item.intervalBetweenBalls,
         'interval_between_balls': item.intervalBetweenBalls,
         'delayBetweenBalls': item.intervalBetweenBalls,
@@ -804,6 +878,8 @@ class SessionsService extends ChangeNotifier {
                     final aType = (o['arm_type'] ?? o['armType'] ?? 'RIGHT').toString();
                     final len = (o['length'] ?? 'GOOD').toString();
                     final vari = (o['variation'] ?? 'SWING').toString();
+                    final dir = (o['direction'] ?? 'OUT').toString();
+                    final sLvl = (o['spin_level'] ?? o['spinLevel'] ?? o['level'] ?? 'BASIC').toString();
                     final lineNo = (o['line_no'] ?? o['lineNo'] ?? 3);
 
                     parsedBookedOvers.add({
@@ -815,6 +891,10 @@ class SessionsService extends ChangeNotifier {
                       'bowlerType': bType.toUpperCase().contains('SPIN') ? 'Spin' : 'Pace',
                       'length': len,
                       'variation': vari,
+                      'direction': dir.toUpperCase().contains('IN') ? 'In' : 'Out',
+                      'level': sLvl.toUpperCase().contains('HIGH')
+                          ? 'High'
+                          : (sLvl.toUpperCase().contains('MED') ? 'Medium' : 'Basic'),
                       'lineNo': lineNo,
                       'session_line': lineNo,
                     });

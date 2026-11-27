@@ -123,6 +123,8 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
         String overVariation = s.variation;
         String overBowlerType = s.bowlerType;
         String overDirection = s.direction;
+        String overLevel = s.level;
+        String overArm = s.armType;
         int overLine = 3;
         String overLength = s.length.toUpperCase();
         if (!['SLOT', 'FULL', 'GOOD', 'SHORT'].contains(overLength)) {
@@ -134,7 +136,13 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
           if (overMap['speed'] != null) {
             overSpeed = double.tryParse(overMap['speed'].toString().replaceAll(RegExp(r'[^0-9.]'), '')) ?? speedVal;
           }
-          if (overMap['type'] != null) {
+          if (overMap['armType'] != null) {
+            overArm = overMap['armType'].toString();
+          }
+          if (overMap['bowlerType'] != null) {
+            final bStr = overMap['bowlerType'].toString().toUpperCase();
+            overBowlerType = bStr.contains('SPIN') ? 'Spin' : 'Pace';
+          } else if (overMap['type'] != null) {
             final typeStr = overMap['type'].toString();
             if (typeStr.contains('Spin')) {
               overBowlerType = 'Spin';
@@ -144,6 +152,12 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
           }
           if (overMap['variation'] != null) {
             overVariation = overMap['variation'].toString();
+          }
+          if (overMap['direction'] != null) {
+            overDirection = overMap['direction'].toString();
+          }
+          if (overMap['level'] != null || overMap['spin_level'] != null || overMap['spinLevel'] != null) {
+            overLevel = (overMap['level'] ?? overMap['spin_level'] ?? overMap['spinLevel']).toString();
           }
           if (overMap['lineNo'] != null || overMap['session_line'] != null) {
             overLine = int.tryParse((overMap['lineNo'] ?? overMap['session_line']).toString()) ?? 3;
@@ -157,19 +171,26 @@ class _SessionConfigScreenState extends State<SessionConfigScreen> {
         }
 
         if (overBowlerType == 'Spin') {
-          if (overVariation != 'Off Spin' && overVariation != 'Leg Spin') {
-            overVariation = 'Off Spin';
+          if (overVariation != 'Off Spin' && overVariation != 'Leg Spin' && overVariation != 'Straight') {
+            final uVar = overVariation.toUpperCase();
+            if (uVar.contains('LEG')) {
+              overVariation = 'Leg Spin';
+            } else if (uVar.contains('STRAIGHT')) {
+              overVariation = 'Straight';
+            } else {
+              overVariation = 'Off Spin';
+            }
           }
         }
 
         _overConfigs[i] = OverConfig(
           ballSpeed: overSpeed,
-          selectedArm: s.armType,
+          selectedArm: overArm,
           selectedBowlerType: overBowlerType,
           selectedLength: overLength,
           selectedVariation: overVariation,
           selectedDirection: overDirection,
-          selectedLevel: s.level,
+          selectedLevel: overLevel,
           selectedLine: overLine,
         );
       }
@@ -1698,15 +1719,18 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
     final normBowler = _normalizeBowler(bowlerType, variation);
     if (normBowler == "PACE") {
       if (variation == null) return "SWING";
-      return variation.toUpperCase().contains("SEAM") ? "SEAM" : "SWING";
+      final upper = variation.toUpperCase();
+      if (upper.contains("STRAIGHT")) return "STRAIGHT";
+      if (upper.contains("SEAM")) return "SEAM";
+      return "SWING";
     } else {
-      // Spin variations: Off Spin, Leg Spin, Straight
+      // Spin variations: OFFSPIN, LEGSPIN, STRAIGHT
       if (variation == null) return "STRAIGHT";
       final upper = variation.toUpperCase();
-      if (upper.contains("OFF")) return "OFF_SPIN";
-      if (upper.contains("LEG")) return "LEG_SPIN";
+      if (upper.contains("OFF")) return "OFFSPIN";
+      if (upper.contains("LEG")) return "LEGSPIN";
       if (upper.contains("STRAIGHT")) return "STRAIGHT";
-      return upper;
+      return upper.replaceAll('_', '').replaceAll(' ', '');
     }
   }
 
@@ -1718,7 +1742,7 @@ class _SessionQrShareDialogState extends State<SessionQrShareDialog> {
   static String _normalizeSpinLevel(String? lvl) {
     if (lvl == null) return "BASIC";
     final upper = lvl.toUpperCase();
-    if (upper.contains("ADV")) return "ADVANCE";
+    if (upper.contains("HIGH") || upper.contains("ADV")) return "HIGH";
     if (upper.contains("MED")) return "MEDIUM";
     return "BASIC";
   }
